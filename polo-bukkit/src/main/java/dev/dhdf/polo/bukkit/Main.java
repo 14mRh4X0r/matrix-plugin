@@ -4,12 +4,19 @@ import dev.dhdf.polo.PoloPlugin;
 import dev.dhdf.polo.util.Sync;
 import dev.dhdf.polo.webclient.Config;
 import dev.dhdf.polo.webclient.WebClient;
+import net.kyori.text.Component;
+import net.kyori.text.adapter.bukkit.TextAdapter;
+import org.bukkit.Server;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.permissions.Permissible;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.Iterator;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 
 /**
@@ -90,8 +97,18 @@ public class Main extends JavaPlugin implements PoloPlugin {
     }
 
     @Override
-    public void broadcastMessage(String message) {
-        this.getServer().broadcastMessage(message);
+    public void broadcastMessage(Component message) {
+        // We have to mimic Server.broadcastMessage here.
+        // We cannot emit an event however, because it's not plain text
+        Server server = this.getServer();
+        Stream<CommandSender> receivers =
+                server.getPluginManager().getPermissionSubscriptions(Server.BROADCAST_CHANNEL_USERS).stream()
+                    .filter(CommandSender.class::isInstance)
+                    .filter(permissible -> permissible.hasPermission(Server.BROADCAST_CHANNEL_USERS))
+                    .map(CommandSender.class::cast);
+
+        // It's safe to use Stream::iterator as Iterable implementation here, because the iterator will only be used once.
+        TextAdapter.sendComponent(receivers::iterator, message);
     }
 
     @Override

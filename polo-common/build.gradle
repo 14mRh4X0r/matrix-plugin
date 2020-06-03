@@ -9,4 +9,15 @@ repositories {
 dependencies {
     implementation 'org.json:json:20190722'
     implementation "org.slf4j:slf4j-api:${slf4jVersion}"
+    implementation("net.kyori:text-serializer-gson:${textVersion}") {
+        exclude(module: 'text-api') // Already declared as API dependency
+        exclude(module: 'gson') // Already provided by Minecraft itself
+    }
+
+    api("net.kyori:text-api:${textVersion}") {
+        exclude(module: 'checker-qual') // Test dependency
+    }
+
+    // Minecraft provides these itself
+    compileOnly 'com.google.code.gson:gson:2.7'
 }

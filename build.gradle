@@ -4,5 +4,6 @@ allprojects {
 
     ext {
         slf4jVersion = '1.7.30'
+        textVersion = '3.0.3'
     }
 }

@@ -16,6 +16,11 @@ repositories {
 
 dependencies {
     implementation project(':polo-common')
+    implementation("net.kyori:text-adapter-bukkit:${textVersion}") {
+        // Exclude modules inherited from :polo-common
+        exclude(module: 'text-api')
+        exclude(module: 'text-serializer-gson')
+    }
 
     runtimeOnly "org.slf4j:slf4j-jdk14:${slf4jVersion}"
     compileOnly 'org.bukkit:bukkit:1.15.2-R0.1-SNAPSHOT'
