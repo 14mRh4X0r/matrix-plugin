@@ -1,17 +1,18 @@
 package dev.dhdf.polo.webclient;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 import dev.dhdf.polo.PoloPlugin;
+import dev.dhdf.polo.types.ChatResult;
 import dev.dhdf.polo.types.MCMessage;
 import dev.dhdf.polo.types.PoloPlayer;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.json.JSONTokener;
+import dev.dhdf.polo.types.VibeCheckResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -24,6 +25,7 @@ import java.net.URL;
  * events that occurred (which is only chat messages at the moment)
  */
 public class WebClient {
+    private static final Gson GSON = new Gson();
     private final String address;
     private final int port;
     private final String token;
@@ -47,12 +49,12 @@ public class WebClient {
      */
     public void postChat(PoloPlayer player, String context) {
         MCMessage message = new MCMessage(player, context);
-        String body = message.toString();
 
         this.doRequest(
                 "POST",
                 "/chat",
-                body
+                message,
+                void.class
         );
     }
 
@@ -60,18 +62,17 @@ public class WebClient {
      * Get new messages from Marco and the Matrix room
      */
     public void getChat() {
-        JSONObject chatResponse = this.doRequest(
+        ChatResult chatResponse = this.doRequest(
                 "GET",
                 "/chat",
-                null
+                null,
+                ChatResult.class
         );
         if (chatResponse == null)
             return;
-        JSONArray messages = chatResponse.getJSONArray("chat");
 
         // Send all the new messages to the minecraft chat
-        for (int i = 0; i < messages.length(); ++i) {
-            String message = messages.getString(i);
+        for (String message : chatResponse.getChat()) {
             onRoomMessage(message);
         }
     }
@@ -88,20 +89,21 @@ public class WebClient {
      */
     public boolean vibeCheck() {
         try {
-            JSONObject check = this.doRequest(
+            VibeCheckResult check = this.doRequest(
                     "GET",
                     "/vibeCheck",
-                    null
+                    null,
+                    VibeCheckResult.class
             );
 
-            return check.getString("status").equals("OK");
+            return check.isOK();
 
         } catch (NullPointerException err) {
             return false;
         }
     }
 
-    public JSONObject doRequest(String method, String endpoint, String body) {
+    public <T> T doRequest(String method, String endpoint, Object body, Class<T> resultType) {
         try {
             URL url = new URL(
                     "http://" + address + ":" + port + endpoint
@@ -111,12 +113,12 @@ public class WebClient {
             connection.setRequestMethod(method);
             connection.setRequestProperty("Authorization", "Bearer " + this.token);
             connection.setRequestProperty("Content-Type", "application/json");
-            connection.setRequestProperty("User-Agent", "Marco Spigot Plugin");
+            connection.setRequestProperty("User-Agent", "Marco Plugin");
 
             if (!method.equals("GET") && body != null) {
                 connection.setDoOutput(true);
                 OutputStreamWriter writer = new OutputStreamWriter(connection.getOutputStream());
-                writer.write(body);
+                GSON.toJson(body, writer);
                 writer.flush();
                 writer.close();
             }
@@ -128,20 +130,7 @@ public class WebClient {
                 if (stream == null)
                     stream = connection.getInputStream();
 
-                if (stream.toString().startsWith("{")) {
-                    JSONTokener parsing = new JSONTokener(stream);
-                    JSONObject parsed = new JSONObject(parsing);
-
-                    if (resCode != 200) {
-                        logger.warn("An error has occurred");
-                        logger.warn(parsed.getString("error"));
-                        logger.warn(parsed.getString("message"));
-                    }
-
-                    return parsed;
-                } else {
-                    return null;
-                }
+                return GSON.fromJson(new InputStreamReader(stream), resultType);
             } else {
                 logger.error("An invalid endpoint was called for.");
                 return null;
@@ -149,7 +138,7 @@ public class WebClient {
         } catch (java.net.ConnectException e) {
             logger.warn(e.getMessage());
             return null;
-        } catch (IOException | JSONException | NullPointerException e) {
+        } catch (IOException | JsonParseException | NullPointerException e) {
             e.printStackTrace();
             return null;
         }
